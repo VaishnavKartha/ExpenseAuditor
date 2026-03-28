@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+@layer components{
+    .li-items{
+        cursor:pointer;
+        padding:8px 12px;
+        display:flex;
+        gap:4px;
+    }
+}
+
+@theme {
+    --color-primary: #7C3AED;
+    --color-accent:#F97316;
+    --color-textcol:#111827;
+}
