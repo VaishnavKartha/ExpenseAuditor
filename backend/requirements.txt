@@ -1,0 +1,36 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12
+
+# MongoDB
+motor==3.6.0
+pymongo==4.9.2
+beanie==1.29.0
+
+# AI
+google-generativeai==0.8.3
+
+# OCR fallback
+pytesseract==0.3.10
+Pillow==11.0.0
+pdf2image==1.17.0
+
+# Auth — replaced python-jose (unmaintained + CVEs) and passlib (broken on 3.13)
+PyJWT==2.10.1
+bcrypt==4.2.1
+cryptography==44.0.0
+
+# Email
+resend==2.4.0
+
+# Utilities
+python-dotenv==1.0.1
+pydantic==2.10.4
+pydantic-settings==2.7.0
+aiofiles==24.1.0
+
+
+
+# PDF parsing (for policy document)
+PyMuPDF==1.25.1
