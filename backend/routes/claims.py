@@ -60,10 +60,10 @@ async def create_claim(
     business_purpose: Optional[str]   = Form(...),
     category:         Optional[str]   = Form(None),
     amount:           Optional[float] = Form(None),
-    currency:         Optional[str]   = Form("GBP"),
+    currency:         Optional[str]   = Form(None),
     expense_date:     Optional[str]   = Form(None),
     file:             UploadFile      = File(...),
-    current_user:     dict            = Depends(get_current_user),
+    #current_user:     dict            = Depends(get_current_user),
 ):
     # ── Step 1: Save uploaded receipt file to disk ─────────────────────────────
     os.makedirs("uploads", exist_ok=True)
@@ -97,7 +97,7 @@ async def create_claim(
     # AND what Gemini extracted from the receipt image (extracted_data).
     # If Gemini found a value the employee didn't type, both are stored —
     # the auditor can compare them in the detail view.
-    now = datetime.now(timezone.utc)
+    '''now = datetime.now(timezone.utc)
     doc = {
         # Who submitted
         "employee_id":       current_user["_id"],
@@ -138,10 +138,11 @@ async def create_claim(
 
     # ── Step 5: Return the saved document ─────────────────────────────────────
     # Attach the generated _id, convert to JSON-safe types, return
-    doc["_id"] = result.inserted_id
+    doc["_id"] = result.inserted_id'''
+
     return JSONResponse(
         status_code=201,
-        content=_to_json_safe(doc)
+        content="success"
     )
 
 

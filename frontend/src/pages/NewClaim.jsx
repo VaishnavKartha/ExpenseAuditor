@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react'
 import {useDropzone} from 'react-dropzone'
+import axios from 'axios'
 import {X} from 'lucide-react'
 const NewClaim = () => {
     const [file,setFile]=useState(null)
@@ -53,7 +54,7 @@ const NewClaim = () => {
     }
 
 
-    const createClaim=()=>{
+     const createClaim=async()=>{
         try{
             setLoading(true);
 
@@ -63,8 +64,11 @@ const NewClaim = () => {
 
             const formPayLoad= new FormData();
             formPayLoad.append('description',formData.description)
+            formPayLoad.append("business_purpose","Meals")
             formPayLoad.append('file',file)
-            console.log(formPayLoad)
+            
+            const response=await axios.post("http://localhost:8000/claims/",formPayLoad)
+            console.log(response)
         }catch(error){
             console.log(error)
         }finally{

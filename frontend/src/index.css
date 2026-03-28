@@ -1,4 +1,15 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+@layer base {
+  body {
+    font-family: var(--font-jetbrains);
+  }
+  h1,h2,h3,h4,h5,h6{
+    font-family: var(--font-poppins);
+  }
+}
 
 @layer components{
     .li-items{
@@ -7,10 +18,35 @@
         display:flex;
         gap:4px;
     }
+
+    .headings{
+        font-weight: 600;
+        font-size: 16px;
+    }
+
+    .fake-input{
+        border: 1px solid #ccc;
+        padding: 8px 12px;
+        border-radius: 4px;
+        background-color: #f5f5f5;
+        color: #111827;
+        width: 100%;
+    }
+
+    .view-section{
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 12px; 
+        padding:8px 0;
+    }
 }
 
 @theme {
     --color-primary: #7C3AED;
     --color-accent:#F97316;
     --color-textcol:#111827;
+    --font-sans: 'Inter', sans-serif;
+    --font-poppins: 'Poppins', sans-serif;
+    --font-jetbrains:'JetBrains Mono', monospace;
 }

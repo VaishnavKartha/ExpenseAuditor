@@ -1,13 +1,29 @@
 import React from "react"
 import { useState } from "react"
+import expense from '../utils/demoexpense'
+import NoClaim from "../components/NoClaim";
+import ClaimFeatures from "../components/ClaimFeatures";
 export default function Claims(){
 
-    const [file,setFile] = useState(null)
-    const [preview,setPreview] = useState(null)
-    const [loading,setLoading] = useState(false)
+    const [claims,setClaims]=useState(expense);
 
-    return <>
     
-        <div className="text-red-500">Claims</div>
-    </>
+
+    return (
+
+        <div className="min-h-screen max-md:px-4">
+
+            <h1 className="font-bold text-4xl"><span>My</span> <span className="text-primary">Claims</span></h1>
+             {claims.length == 0 ?
+               <NoClaim/>:
+
+                <ClaimFeatures claims={claims} setClaims={setClaims}/>
+
+                }
+
+        </div>
+    )
+    
+        
+    
 }
