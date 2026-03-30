@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from fastapi.responses import JSONResponse
 from typing import Optional
 from config import claims_collection, notifications_collection
-from models import Override
-from utils.auth import get_current_user
+from models import Override, OverrideStored
+from utils.auth import get_current_user 
 from utils.ocr import extract
+from utils.audit import audit_claim
 
 router = APIRouter(prefix="/claims", tags=["Claims"])
 
@@ -57,13 +58,13 @@ async def _create_notification(user_id: str, claim_id: str, status_val: str):
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_claim(
     description:      Optional[str]   = Form(None),
-    business_purpose: Optional[str]   = Form(...),
-    category:         Optional[str]   = Form(None),
+    business_purpose: Optional[str]   = Form(""),
+    category:         Optional[str]   = Form("Other"),
     amount:           Optional[float] = Form(None),
     currency:         Optional[str]   = Form(None),
     expense_date:     Optional[str]   = Form(None),
     file:             UploadFile      = File(...),
-    #current_user:     dict            = Depends(get_current_user),
+    current_user:     dict            = Depends(get_current_user),
 ):
     # ── Step 1: Save uploaded receipt file to disk ─────────────────────────────
     os.makedirs("uploads", exist_ok=True)
@@ -72,49 +73,44 @@ async def create_claim(
         shutil.copyfileobj(file.file, buffer)
 
     # ── Step 2: Run Gemini OCR ─────────────────────────────────────────────────
-    # Returns: {"vendor_name": ..., "total": ..., "currency": ..., "items": [...]}
     extracted = extract(file_path)
     print("OCR result:", extracted)
 
-
-    if extracted["confidence"] != "high" :
+    if extracted["confidence"] == "low":
         return JSONResponse(
-        status_code=201,
-        content={"message":"Image is blurry or corrupted, Please reupload a clear image or fill in the form"}
-
-
-        
-    )
+            status_code=422,
+            content={
+                "detail": "Image is blurry or corrupted. Please re-upload a clear image.",
+                "confidence": extracted["confidence"],
+            }
+        )
 
     if extracted.get("total") is None and extracted.get("items"):
         extracted["total"] = sum(
-        item["price"] * item.get("quantity", 1)
-        for item in extracted["items"]
+            item["price"] * item.get("quantity", 1)
+            for item in extracted["items"]
+        )
+
+    # ── Step 3: Run policy cross-reference audit ──────────────────────────────
+    audit_result = await audit_claim(
+        extracted_data=extracted,
+        category=category or "Other",
+        business_purpose=business_purpose or description or "",
+        region=current_user.get("region", "all"),
     )
 
-    # ── Step 3: Build document ─────────────────────────────────────────────────
-    # We store both what the employee submitted (amount, currency, expense_date)
-    # AND what Gemini extracted from the receipt image (extracted_data).
-    # If Gemini found a value the employee didn't type, both are stored —
-    # the auditor can compare them in the detail view.
-    '''now = datetime.now(timezone.utc)
+    # ── Step 4: Build document ─────────────────────────────────────────────────
+    now = datetime.now(timezone.utc)
     doc = {
-        # Who submitted
         "employee_id":       current_user["_id"],
-
-        # Receipt file
+        "employee_name":     current_user.get("name", "Unknown"),
         "receipt_image_url": file_path,
-
-        # What employee filled in the form
         "description":       description,
         "business_purpose":  business_purpose,
         "category":          category,
-        "amount":            amount,
-        "currency":          currency or extracted.get("currency"),
-        "expense_date":      expense_date,
-
-        # What Gemini extracted from the receipt image
-        # Stored as a nested object — matches ExtractedData in your schema
+        "amount":            amount or extracted.get("total"),
+        "currency":          currency or extracted.get("currency", "GBP"),
+        "expense_date":      expense_date or extracted.get("date"),
         "extracted_data": {
             "vendor_name": extracted.get("vendor_name"),
             "total":       extracted.get("total"),
@@ -123,26 +119,27 @@ async def create_claim(
             "items":       extracted.get("items", []),
             "raw_text":    extracted.get("raw_text"),
         },
-
-        # These are filled later by the audit pipeline
-        "audit_result": None,
+        "audit_result": audit_result,
         "override":     None,
-        "final_status": "pending",
-
+        "final_status": audit_result.get("status", "pending"),
         "created_at": now,
         "updated_at": now,
     }
 
-    # ── Step 4: Insert into MongoDB ────────────────────────────────────────────
+    # ── Step 5: Insert into MongoDB ────────────────────────────────────────────
     result = await claims_collection.insert_one(doc)
+    doc["_id"] = result.inserted_id
 
-    # ── Step 5: Return the saved document ─────────────────────────────────────
-    # Attach the generated _id, convert to JSON-safe types, return
-    doc["_id"] = result.inserted_id'''
+    # ── Step 6: Create notification for the employee ──────────────────────────
+    await _create_notification(
+        current_user["_id"],
+        str(result.inserted_id),
+        audit_result.get("status", "flagged"),
+    )
 
     return JSONResponse(
         status_code=201,
-        content="success"
+        content=_to_json_safe(doc),
     )
 
 
@@ -192,9 +189,12 @@ async def override_claim(
     if not doc:
         raise HTTPException(status_code=404, detail="Claim not found")
 
-    override_data = override.model_dump()
-    override_data["auditor_id"]    = current_user["_id"]
-    override_data["overridden_at"] = datetime.now(timezone.utc)
+    override_data = OverrideStored(
+        auditor_id=current_user["_id"],
+        new_status=override.new_status,
+        comment=override.comment,
+        overridden_at=datetime.now(timezone.utc)
+    ).model_dump()
 
     await claims_collection.update_one(
         {"_id": ObjectId(claim_id)},

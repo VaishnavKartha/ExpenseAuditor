@@ -88,11 +88,16 @@ class AuditResult(BaseModel):
 
 
 class Override(BaseModel):
-    auditor_id: str
     new_status: AuditStatus
     comment: str
     overridden_at: datetime = Field(default_factory=datetime.utcnow)
 
+
+class OverrideStored(BaseModel):
+    auditor_id:str
+    new_status: AuditStatus
+    comment: str
+    overridden_at: datetime = Field(default_factory=datetime.utcnow)
 
 class ClaimCreate(BaseModel):
     employee_id: str
@@ -130,6 +135,7 @@ class ClaimOut(BaseModel):
 
 class PolicyConstraints(BaseModel):
     max_amount: Optional[float] = None
+    currency: str = "GBP"
     prohibited_items: list[str] = []
     allowed_days: list[str] = []
 

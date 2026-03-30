@@ -50,3 +50,43 @@ async def get_policy(policy_id: str):
         raise HTTPException(status_code=404, detail="Policy not found")
     doc["_id"] = str(doc["_id"])
     return doc
+
+
+@router.put("/{policy_id}")
+async def update_policy(
+    policy_id: str,
+    policy: PolicyCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    if current_user["role"] != "auditor":
+        raise HTTPException(status_code=403, detail="Only auditors can manage policies")
+
+    existing = await policies_collection.find_one({"_id": ObjectId(policy_id)})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Policy not found")
+
+    update_data = policy.model_dump()
+    update_data["updated_at"] = datetime.now(timezone.utc)
+
+    await policies_collection.update_one(
+        {"_id": ObjectId(policy_id)},
+        {"$set": update_data},
+    )
+
+    updated = await policies_collection.find_one({"_id": ObjectId(policy_id)})
+    updated["_id"] = str(updated["_id"])
+    return updated
+
+
+@router.delete("/{policy_id}")
+async def delete_policy(
+    policy_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    if current_user["role"] != "auditor":
+        raise HTTPException(status_code=403, detail="Only auditors can manage policies")
+
+    result = await policies_collection.delete_one({"_id": ObjectId(policy_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Policy not found")
+    return {"message": "Policy deleted successfully"}

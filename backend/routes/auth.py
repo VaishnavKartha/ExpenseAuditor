@@ -40,4 +40,15 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     })
 
     print("Login Successful")
-    return {"access_token": token, "token_type": "bearer"}
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": str(user["_id"]),
+            "name": user["name"],
+            "email": user["email"],
+            "role": user["role"],
+            "department": user.get("department"),
+            "region": user.get("region"),
+        }
+    }
