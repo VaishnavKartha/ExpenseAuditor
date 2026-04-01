@@ -11,7 +11,7 @@ from bson import ObjectId
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
-# ── Password helpers ───────────────────────────────────
+
 
 def hash_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
@@ -21,7 +21,7 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
-# ── JWT helpers ────────────────────────────────────────
+
 
 def create_access_token(data: dict) -> str:
     payload = data.copy()
@@ -38,7 +38,7 @@ def decode_access_token(token: str) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 
-# ── FastAPI dependency ─────────────────────────────────
+
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     payload = decode_access_token(token)

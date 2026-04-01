@@ -1,9 +1,4 @@
-"""
-Policy Cross-Reference & Audit Engine
-──────────────────────────────────────
-Compares extracted receipt data against stored expense policies.
-Uses hard constraint checks + Gemini AI for contextual analysis.
-"""
+
 
 import json
 import re
@@ -17,7 +12,7 @@ from config import GEMINI_API_KEY, policies_collection
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-# ── Policy retrieval ───────────────────────────────────────────────────────────
+
 
 async def get_relevant_policies(category: str, region: str = "all") -> list[dict]:
     """
@@ -26,7 +21,7 @@ async def get_relevant_policies(category: str, region: str = "all") -> list[dict
     """
     query = {"category": category}
 
-    # Try region-specific first
+  
     if region and region != "all":
         query["region"] = region
         cursor = policies_collection.find(query)
@@ -38,7 +33,7 @@ async def get_relevant_policies(category: str, region: str = "all") -> list[dict
         if policies:
             return policies
 
-        # Fallback to "all" region
+      
         query["region"] = "all"
 
     cursor = policies_collection.find(query)
@@ -50,9 +45,7 @@ async def get_relevant_policies(category: str, region: str = "all") -> list[dict
     return policies
 
 
-# ── Currency conversion (approximate rates to a common base: GBP) ──────────────
 
-# Rates: how many units of each currency = 1 GBP
 APPROX_RATES_TO_GBP = {
     "GBP": 1.0,
     "USD": 1.27,
@@ -77,21 +70,17 @@ def _convert_to_policy_currency(amount: float, from_currency: str, to_currency: 
     to_rate = APPROX_RATES_TO_GBP.get(to_c)
 
     if from_rate is None or to_rate is None:
-        return None  # Unknown currency — skip hard check, let Gemini handle it
+        return None 
 
-    # Convert: amount_in_from → GBP → to_currency
+  
     amount_in_gbp = amount / from_rate
     return round(amount_in_gbp * to_rate, 2)
 
 
-# ── Hard constraint checks ─────────────────────────────────────────────────────
+
 
 def check_constraints(extracted_data: dict, policies: list[dict]) -> list[str]:
-    """
-    Run deterministic constraint checks before calling AI.
-    Currency-aware: converts receipt amount to policy currency before comparing.
-    Returns a list of violation strings.
-    """
+    
     violations = []
     total = extracted_data.get("total") or 0
     receipt_currency = (extracted_data.get("currency") or "").upper()
@@ -143,7 +132,114 @@ def check_constraints(extracted_data: dict, policies: list[dict]) -> list[str]:
     return violations
 
 
-# ── Gemini audit ───────────────────────────────────────────────────────────────
+
+
+_GROUP_KEYWORDS = [
+    "team building", "team lunch", "team dinner", "team outing",
+    "group dinner", "group lunch", "group meeting",
+    "department lunch", "department dinner",
+    "celebration", "farewell", "welcome party", "offsite",
+    "all-hands", "workshop", "training session",
+]
+
+
+_CLIENT_KEYWORDS = [
+    "client meeting", "client lunch", "client dinner",
+    "vendor meeting", "partner meeting", "stakeholder",
+    "business development", "sales meeting", "pitch",
+    "investor", "board meeting",
+]
+
+_CATEGORY_MISMATCH = {
+    "Transport": ["lunch", "dinner", "breakfast", "meal", "food", "catering", "hotel", "accommodation"],
+    "Meals":     ["taxi", "uber", "flight", "train ticket", "bus ticket", "mileage", "fuel", "parking"],
+    "Lodging":   ["taxi", "uber", "lunch", "dinner", "flight", "fuel"],
+    "Office Supplies": ["lunch", "dinner", "taxi", "hotel", "flight"],
+}
+
+
+def check_contextual_flags(
+    business_purpose: str,
+    extracted_data: dict,
+    category: str,
+) -> list[str]:
+    
+    flags = []
+    purpose_lower = (business_purpose or "").lower().strip()
+    items = extracted_data.get("items") or []
+    total = extracted_data.get("total") or 0
+    expense_date_str = extracted_data.get("date")
+    num_items = len(items)
+
+ 
+    if len(purpose_lower) < 5:
+        flags.append(
+            "Business purpose is too vague or missing. "
+            "A clear justification is required for all expense claims."
+        )
+        return flags 
+
+    is_group_claim = any(kw in purpose_lower for kw in _GROUP_KEYWORDS)
+    if is_group_claim:
+        if num_items <= 1 and total > 0:
+            flags.append(
+                f"Business purpose mentions a group activity "
+                f"('{business_purpose}'), but the receipt contains only "
+                f"{num_items} item(s). Group events typically have multiple items."
+            )
+     
+        if 0 < total < 15:
+            flags.append(
+                f"Business purpose mentions a group activity "
+                f"('{business_purpose}'), but total is only "
+                f"{extracted_data.get('currency', '')} {total}, "
+                f"which is unusually low for a group expense."
+            )
+
+ 
+    is_client_claim = any(kw in purpose_lower for kw in _CLIENT_KEYWORDS)
+    if is_client_claim and expense_date_str:
+        try:
+            expense_date = datetime.strptime(expense_date_str, "%Y-%m-%d")
+            day_name = expense_date.strftime("%A")
+            if day_name in ("Saturday", "Sunday"):
+                flags.append(
+                    f"Business purpose mentions a client/formal activity "
+                    f"('{business_purpose}'), but the expense date falls on "
+                    f"{day_name}. Client meetings on weekends are unusual "
+                    f"and may require additional justification."
+                )
+        except ValueError:
+            pass
+
+   
+    mismatch_keywords = _CATEGORY_MISMATCH.get(category, [])
+    for kw in mismatch_keywords:
+        if kw in purpose_lower:
+            flags.append(
+                f"Category '{category}' may not match the business purpose: "
+                f"'{business_purpose}' mentions '{kw}', which typically belongs "
+                f"to a different expense category."
+            )
+            break 
+
+
+    personal_keywords = [
+        "personal", "birthday", "anniversary", "family",
+        "friend", "date night", "vacation", "holiday",
+    ]
+    for kw in personal_keywords:
+        if kw in purpose_lower:
+            flags.append(
+                f"Business purpose '{business_purpose}' contains the term "
+                f"'{kw}', which suggests a personal expense. "
+                f"Personal expenses are not reimbursable."
+            )
+            break
+
+    return flags
+
+
 
 AUDIT_PROMPT = """
 You are a corporate expense auditor AI. Your job is to compare extracted receipt
@@ -158,8 +254,11 @@ The receipt currency may differ from the policy currency. When comparing amounts
 ## Extracted Receipt Data
 {receipt_data}
 
-## Business Purpose
+## Business Purpose (stated by employee)
 {business_purpose}
+
+## Expense Category
+{category}
 
 ## Applicable Expense Policies
 {policies_text}
@@ -167,29 +266,55 @@ The receipt currency may differ from the policy currency. When comparing amounts
 ## Pre-check Violations (already detected)
 {violations}
 
+## Contextual Flags (already detected)
+{contextual_flags}
+
 ## Instructions
-Analyze the receipt against the policies. Consider:
-1. Is the total amount within policy limits? (CONVERT CURRENCIES FIRST)
-2. Are any items prohibited by policy?
-3. Does the business purpose align with the expense category?
-4. Are there any contextual red flags (e.g., weekend claims for weekday-only categories)?
+Analyze the receipt against the policies. You MUST perform ALL of these checks:
+
+### 1. Amount & Constraint Checks
+- Is the total amount within policy limits? (CONVERT CURRENCIES FIRST)
+- Are any items prohibited by policy?
+
+### 2. Contextual Audit (CRITICAL)
+Carefully compare the employee's stated **Business Purpose** against the actual
+receipt data to detect inconsistencies:
+- **Group vs. Individual**: If the purpose claims a group event (team lunch,
+  team building, department dinner), does the receipt support it? Look for:
+  - Multiple items/portions on the receipt
+  - An amount consistent with multiple people
+  - Example red flag: "Team Building dinner" but receipt shows 1 sandwich for £6
+- **Client/Formal Activity Timing**: Is a client meeting claimed on a weekend
+  or public holiday? This is unusual and should be flagged.
+- **Category-Purpose Alignment**: Does the stated purpose match the expense
+  category? e.g., claiming "client lunch" under Transport is suspicious.
+- **Plausibility**: Does the amount make sense for the stated purpose?
+  e.g., a £200 "solo working lunch" is implausible.
+- **Personal Expense Indicators**: Does the purpose or receipt suggest a
+  personal expense disguised as business? Look for personal items, family
+  references, non-business venues.
+
+### 3. Date & Day Checks
+- Are there any contextual red flags with the expense date?
+  (e.g., weekend claims for weekday-only categories)
 
 Return ONLY a valid JSON object — no markdown, no explanation:
 {{
   "status": "approved" | "flagged" | "rejected",
   "risk_level": "low" | "medium" | "high",
-  "explanation": "A 1-2 sentence explanation citing the specific policy rule. Include currency conversion if applicable.",
+  "explanation": "A 1-2 sentence explanation citing the specific policy rule. Include currency conversion if applicable. If contextual issues exist, mention them.",
   "policy_snippet": "The specific policy text that applies",
   "violations": ["list", "of", "specific", "violations"]
 }}
 
 Rules:
-- If pre-check violations exist, the status must be "rejected" or "flagged"
-- "approved" = fully compliant, no concerns
-- "flagged" = minor discrepancy or needs human review
-- "rejected" = clear policy violation
+- If pre-check violations OR contextual flags exist, the status must be "rejected" or "flagged"
+- "approved" = fully compliant, no concerns, purpose aligns with receipt
+- "flagged" = minor discrepancy, contextual concern, or needs human review
+- "rejected" = clear policy violation or strong contextual inconsistency
 - Always cite the specific policy rule in the explanation
 - When amounts are in different currencies, convert before comparing
+- If contextual flags were pre-detected, factor them into your decision
 """
 
 
@@ -199,18 +324,12 @@ async def audit_claim(
     business_purpose: str,
     region: str = "all",
 ) -> dict:
-    """
-    Full audit pipeline:
-    1. Fetch matching policies
-    2. Run hard constraint checks
-    3. Send to Gemini for contextual analysis
-    4. Return structured audit result
-    """
-    # Step 1: Get relevant policies
+    
+
     policies = await get_relevant_policies(category, region)
 
     if not policies:
-        # No policies defined for this category — auto-flag for human review
+ 
         return {
             "status": "flagged",
             "risk_level": "medium",
@@ -219,10 +338,18 @@ async def audit_claim(
             "violations": ["No matching policy found for this expense category"],
         }
 
-    # Step 2: Hard constraint checks
     violations = check_constraints(extracted_data, policies)
 
-    # Step 3: Build policy text for Gemini
+
+    contextual_flags = check_contextual_flags(
+        business_purpose=business_purpose,
+        extracted_data=extracted_data,
+        category=category,
+    )
+    if contextual_flags:
+        print(f"Contextual flags detected: {contextual_flags}")
+
+
     policies_text = "\n\n".join([
         f"Category: {p.get('category')}, Region: {p.get('region')}\n"
         f"Rule: {p.get('rule_text')}\n"
@@ -235,12 +362,15 @@ async def audit_claim(
 
     receipt_str = json.dumps(extracted_data, indent=2, default=str)
     violations_str = "\n".join(violations) if violations else "None detected"
+    contextual_str = "\n".join(contextual_flags) if contextual_flags else "None detected"
 
     prompt = AUDIT_PROMPT.format(
         receipt_data=receipt_str,
         business_purpose=business_purpose,
+        category=category,
         policies_text=policies_text,
         violations=violations_str,
+        contextual_flags=contextual_str,
     )
 
     try:
@@ -253,13 +383,12 @@ async def audit_claim(
         raw_text = re.sub(r"```json|```", "", raw_text).strip()
         result = json.loads(raw_text)
 
-        # Merge pre-check violations with AI-detected ones
+ 
         ai_violations = result.get("violations", [])
-        all_violations = list(set(violations + ai_violations))
+        all_violations = list(set(violations + contextual_flags + ai_violations))
         result["violations"] = all_violations
 
-        # If hard violations exist, enforce at least "flagged"
-        if violations and result.get("status") == "approved":
+        if (violations or contextual_flags) and result.get("status") == "approved":
             result["status"] = "flagged"
             result["risk_level"] = "medium"
 
@@ -271,15 +400,15 @@ async def audit_claim(
 
     except json.JSONDecodeError:
         print(f"Gemini audit returned invalid JSON: {response.text[:200]}")
-        return _fallback_result(violations)
+        return _fallback_result(violations + contextual_flags)
 
     except Exception as e:
         print(f"Gemini audit failed: {e}")
-        return _fallback_result(violations)
+        return _fallback_result(violations + contextual_flags)
 
 
 def _fallback_result(violations: list[str]) -> dict:
-    """Fallback when Gemini fails — use constraint checks only."""
+
     if violations:
         return {
             "status": "flagged",

@@ -41,15 +41,7 @@ Rules:
 # ── Main extract function ──────────────────────────────────────────────────────
 
 def extract(file_path: str) -> dict:
-    """
-    Reads a receipt file from disk, sends it to Gemini Vision,
-    and returns extracted fields as a dict.
-
-    New SDK differences from old:
-      - Uses genai.Client(api_key=...) instead of genai.configure(api_key=...)
-      - Uses client.models.generate_content() instead of model.generate_content()
-      - Image passed as types.Part.from_bytes() instead of a raw dict
-    """
+   
     try:
         # Step 1: Read file from disk
         file_bytes = Path(file_path).read_bytes()
@@ -65,27 +57,23 @@ def extract(file_path: str) -> dict:
         }
         mime_type = mime_map.get(ext, "image/jpeg")
 
-        # Step 3: Convert PDF to image if needed
+       
         if mime_type == "application/pdf":
             file_bytes, mime_type = _pdf_to_image_bytes(file_bytes)
 
-        # Step 4: Build image part using new SDK syntax
-        # Old SDK: {"mime_type": ..., "data": ...}
-        # New SDK: types.Part.from_bytes(data=..., mime_type=...)
+       
         image_part = types.Part.from_bytes(
             data=file_bytes,
             mime_type=mime_type,
         )
 
-        # Step 5: Call Gemini using new client syntax
-        # Old SDK: model.generate_content([image_part, prompt])
-        # New SDK: client.models.generate_content(model=..., contents=[...])
+       
         response = client.models.generate_content(
-            model="gemini-flash-latest",   # latest stable free model
+            model="gemini-flash-latest",  
             contents=[image_part, GEMINI_PROMPT],
         )
 
-        # Step 6: Parse the JSON response
+      
         raw_text = response.text.strip()
         raw_text = re.sub(r"```json|```", "", raw_text).strip()
 
@@ -103,7 +91,7 @@ def extract(file_path: str) -> dict:
         return _empty_result()
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _pdf_to_image_bytes(pdf_bytes: bytes) -> tuple[bytes, str]:
     """Convert first page of a PDF to PNG bytes for Gemini."""

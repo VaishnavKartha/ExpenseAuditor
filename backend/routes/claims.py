@@ -14,10 +14,10 @@ from utils.audit import audit_claim
 router = APIRouter(prefix="/claims", tags=["Claims"])
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _to_json_safe(doc: dict) -> dict:
-    """Convert ObjectId and datetime → strings so FastAPI can serialize them."""
+ 
     result = {}
     for key, value in doc.items():
         if isinstance(value, ObjectId):
@@ -53,7 +53,7 @@ async def _create_notification(user_id: str, claim_id: str, status_val: str):
     })
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_claim(
@@ -66,13 +66,13 @@ async def create_claim(
     file:             UploadFile      = File(...),
     current_user:     dict            = Depends(get_current_user),
 ):
-    # ── Step 1: Save uploaded receipt file to disk ─────────────────────────────
+    
     os.makedirs("uploads", exist_ok=True)
     file_path = f"uploads/{file.filename}"
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # ── Step 2: Run Gemini OCR ─────────────────────────────────────────────────
+   
     extracted = extract(file_path)
     print("OCR result:", extracted)
 
@@ -91,7 +91,7 @@ async def create_claim(
             for item in extracted["items"]
         )
 
-    # ── Step 3: Run policy cross-reference audit ──────────────────────────────
+  
     audit_result = await audit_claim(
         extracted_data=extracted,
         category=category or "Other",
@@ -99,7 +99,7 @@ async def create_claim(
         region=current_user.get("region", "all"),
     )
 
-    # ── Step 4: Build document ─────────────────────────────────────────────────
+   
     now = datetime.now(timezone.utc)
     doc = {
         "employee_id":       current_user["_id"],
@@ -126,11 +126,11 @@ async def create_claim(
         "updated_at": now,
     }
 
-    # ── Step 5: Insert into MongoDB ────────────────────────────────────────────
+  
     result = await claims_collection.insert_one(doc)
     doc["_id"] = result.inserted_id
 
-    # ── Step 6: Create notification for the employee ──────────────────────────
+  
     await _create_notification(
         current_user["_id"],
         str(result.inserted_id),
@@ -145,10 +145,7 @@ async def create_claim(
 
 @router.get("/")
 async def list_claims(current_user: dict = Depends(get_current_user)):
-    """
-    Employees  → see only their own claims, sorted by newest first.
-    Auditors   → see all claims, sorted by risk level (high risk first).
-    """
+    
     query      = {}
     sort_field = "created_at"
 
