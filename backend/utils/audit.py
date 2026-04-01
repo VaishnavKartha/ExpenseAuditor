@@ -1,15 +1,16 @@
 
-
+import os
 import json
 import re
 from datetime import datetime
-
+from dotenv import load_dotenv
 import google.genai as genai
 from google.genai import types
 
-from config import GEMINI_API_KEY, policies_collection
+from config import policies_collection
+load_dotenv()
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 

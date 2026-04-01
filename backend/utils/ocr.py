@@ -1,15 +1,15 @@
 import json
 import re
 from pathlib import Path
+from dotenv import load_dotenv
 import os
-#from dotenv import load_dotenv
 import google.genai as genai
 from google.genai import types
 
-#load_dotenv()
+load_dotenv()
 
 # ── Client setup (new SDK uses a client, not module-level configure) ───────────
-client = genai.Client(api_key="AIzaSyBB7tM2rTpDTGWgeLvOoWNsZERAYS-PwbE")
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ── Prompt ─────────────────────────────────────────────────────────────────────
 GEMINI_PROMPT = """
