@@ -57,6 +57,26 @@ APPROX_RATES_TO_GBP = {
     "JPY": 191.0,
 }
 
+def _convert_to_policy_currency(amount: float, from_currency: str, to_currency: str) -> float | None:
+    """Convert amount between currencies using approximate rates.
+    Returns None if conversion is not possible."""
+    from_c = (from_currency or "").upper()
+    to_c = (to_currency or "").upper()
+
+    if from_c == to_c:
+        return amount
+
+    from_rate = APPROX_RATES_TO_GBP.get(from_c)
+    to_rate = APPROX_RATES_TO_GBP.get(to_c)
+
+    if from_rate is None or to_rate is None:
+        return None 
+
+  
+    amount_in_gbp = amount / from_rate
+    return round(amount_in_gbp * to_rate, 2)
+
+
 
 def check_constraints(extracted_data: dict, policies: list[dict]) -> list[str]:
     

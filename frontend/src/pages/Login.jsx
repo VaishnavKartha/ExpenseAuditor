@@ -32,16 +32,12 @@ export default function Login() {
 
   return (
     <div className="login-page">
-      <div className="login-bg-orbs">
-        <div className="orb orb-1"></div>
-        <div className="orb orb-2"></div>
-        <div className="orb orb-3"></div>
-      </div>
+     
 
       <div className="login-card">
         <div className="login-header">
           <div className="login-logo">
-            <div className="logo-icon">
+            <div className="hidden md:block md:logo-icon">
               <LogIn size={28} />
             </div>
             <h1>ExpenseAuditor</h1>

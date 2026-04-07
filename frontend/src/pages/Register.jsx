@@ -57,9 +57,6 @@ export default function Register() {
   return (
     <div className="login-page">
       <div className="login-bg-orbs">
-        <div className="orb orb-1"></div>
-        <div className="orb orb-2"></div>
-        <div className="orb orb-3"></div>
       </div>
 
       <div className="login-card register-card">
@@ -68,9 +65,9 @@ export default function Register() {
             <div className="logo-icon">
               <UserPlus size={28} />
             </div>
-            <h1>Create Account</h1>
+            <h1 className="max-md:text-md">Create Account</h1>
           </div>
-          <p className="login-subtitle">Join ExpenseAuditor</p>
+          <p className="hidden md:block login-subtitle">Join ExpenseAuditor</p>
         </div>
 
         {error && (
@@ -144,7 +141,7 @@ export default function Register() {
             </div>
           </div>
 
-          <div className="form-row">
+          <div className="form-row flex flex-col md:flex-row">
             <div className="form-group">
               <label htmlFor="role">Role</label>
               <div className="input-wrapper">
