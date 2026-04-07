@@ -81,10 +81,7 @@ const ClaimFeatures = ({ claims = [], setClaims = () => {} }) => {
             />
 
             <div className="flex gap-4 items-center">
-              <p className="text-gray-500">
-                {formatDate(claim.extracted_data?.date || claim.expense_date)}
-              </p>
-
+              
               <p className="text-gray-500">
                 {formatDate(claim.created_at)}
               </p>
