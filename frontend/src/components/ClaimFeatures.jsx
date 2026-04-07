@@ -7,7 +7,7 @@ const ClaimFeatures = ({ claims = [], setClaims = () => {} }) => {
   const navigate = useNavigate();
   const [filters, setFilters] = useState({
     status: "all",
-    date: "all",
+    date: "latest",
     search: "",
   });
 
@@ -37,7 +37,14 @@ const ClaimFeatures = ({ claims = [], setClaims = () => {} }) => {
       .toLowerCase()
       .includes(filters.search.toLowerCase());
 
+
+
     return matchesStatus && matchesSearch;
+  }).sort((a,b)=>{
+    const dateA=new Date(a.created_at+'Z')
+    const dateB=new Date(b.created_at+'Z')
+
+    return filters.date==="latest" ? dateB-dateA : dateA-dateB
   });
 
   return (
@@ -55,6 +62,8 @@ const ClaimFeatures = ({ claims = [], setClaims = () => {} }) => {
         <Filters
           status={filters.status}
           setStatus={(value) => setFilters({ ...filters, status: value })}
+          date={filters.date}
+          setDate={(value) => setFilters({ ...filters, date: value })}
         />
       </div>
 
@@ -75,6 +84,12 @@ const ClaimFeatures = ({ claims = [], setClaims = () => {} }) => {
               <p className="text-gray-500">
                 {formatDate(claim.extracted_data?.date || claim.expense_date)}
               </p>
+
+              <p className="text-gray-500">
+                {formatDate(claim.created_at)}
+              </p>
+
+
               <h3 className="font-semibold">
                 {claim.extracted_data?.vendor_name || claim.description || "Unknown"}
               </h3>

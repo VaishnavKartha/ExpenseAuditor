@@ -52,7 +52,7 @@ export default function Claims() {
 
   return (
     <div className="min-h-screen max-md:px-4">
-      <h1 className="font-bold text-4xl">
+      <h1 className="font-bold text-4xl max-md:ml-8">
         <span>My</span> <span className="text-primary">Claims</span>
       </h1>
       {claims.length === 0 ? (

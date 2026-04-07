@@ -24,7 +24,7 @@ export default function Sidebar() {
     <>
       <span
         onClick={() => setOpen(!open)}
-        className="sm:hidden cursor-pointer absolute bg-white z-10 p-2"
+        className="max-md:mr-12 sm:hidden cursor-pointer absolute bg-white z-10 p-2"
       >
         <Menu />
       </span>
@@ -62,7 +62,7 @@ export default function Sidebar() {
           <li
             className={`${
               activePath === "/" ? "bg-primary text-white" : "hover:bg-gray-100"
-            } li-items rounded-full transition-colors`}
+            } li-items rounded-full transition-colors flex justify-center md:justify-start`}
             onClick={() => {
               navigate("/");
               setOpen(false);
@@ -79,7 +79,7 @@ export default function Sidebar() {
               activePath === "/createclaim"
                 ? "bg-primary text-white"
                 : "hover:bg-gray-100"
-            } li-items rounded-full transition-colors`}
+            } li-items rounded-full transition-colors flex justify-center md:justify-start`}
             onClick={() => {
               navigate("/createclaim");
               setOpen(false);

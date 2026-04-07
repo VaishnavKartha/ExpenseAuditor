@@ -58,28 +58,6 @@ APPROX_RATES_TO_GBP = {
 }
 
 
-def _convert_to_policy_currency(amount: float, from_currency: str, to_currency: str) -> float | None:
-    """Convert amount between currencies using approximate rates.
-    Returns None if conversion is not possible."""
-    from_c = (from_currency or "").upper()
-    to_c = (to_currency or "").upper()
-
-    if from_c == to_c:
-        return amount
-
-    from_rate = APPROX_RATES_TO_GBP.get(from_c)
-    to_rate = APPROX_RATES_TO_GBP.get(to_c)
-
-    if from_rate is None or to_rate is None:
-        return None 
-
-  
-    amount_in_gbp = amount / from_rate
-    return round(amount_in_gbp * to_rate, 2)
-
-
-
-
 def check_constraints(extracted_data: dict, policies: list[dict]) -> list[str]:
     
     violations = []
@@ -93,7 +71,7 @@ def check_constraints(extracted_data: dict, policies: list[dict]) -> list[str]:
         constraints = policy.get("constraints", {})
         policy_currency = (constraints.get("currency") or "GBP").upper()
 
-        # Check max amount (currency-aware)
+      
         max_amount = constraints.get("max_amount")
         if max_amount and total:
             converted = _convert_to_policy_currency(total, receipt_currency, policy_currency)
@@ -106,7 +84,7 @@ def check_constraints(extracted_data: dict, policies: list[dict]) -> list[str]:
                     f"(region: {policy.get('region', 'all')})"
                 )
 
-        # Check prohibited items
+      
         prohibited = constraints.get("prohibited_items", [])
         for prohibited_item in prohibited:
             for item_name in item_names:
@@ -116,7 +94,7 @@ def check_constraints(extracted_data: dict, policies: list[dict]) -> list[str]:
                         f"found in receipt item '{item_name}'"
                     )
 
-        # Check allowed days
+      
         allowed_days = constraints.get("allowed_days", [])
         if allowed_days and expense_date_str:
             try:
@@ -319,12 +297,85 @@ Rules:
 """
 
 
+MAX_RECEIPT_AGE_DAYS = 90          # flag after 90 days
+HARD_REJECT_AGE_DAYS = 365         # reject after 1 year
+
+
+def check_date_validity(extracted_data: dict) -> list[str]:
+    """
+    Validate the receipt date:
+      - Reject future-dated receipts
+      - Reject receipts older than HARD_REJECT_AGE_DAYS (1 year)
+      - Flag receipts older than MAX_RECEIPT_AGE_DAYS (90 days)
+    Returns a list of violation/flag strings (empty if date is valid).
+    """
+    date_str = extracted_data.get("date")
+    if not date_str:
+        return []
+
+    try:
+        receipt_date = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        return ["Receipt date format is invalid or unreadable."]
+
+    today = datetime.now()
+    age_days = (today - receipt_date).days
+
+    if age_days < 0:
+        return [
+            f"Receipt date ({date_str}) is in the future. "
+            f"Future-dated receipts are not allowed."
+        ]
+
+    if age_days > HARD_REJECT_AGE_DAYS:
+        years = age_days // 365
+        return [
+            f"Receipt date ({date_str}) is approximately {years} year(s) old. "
+            f"Receipts older than {HARD_REJECT_AGE_DAYS} days cannot be reimbursed."
+        ]
+
+    if age_days > MAX_RECEIPT_AGE_DAYS:
+        return [
+            f"Receipt date ({date_str}) is {age_days} days old, which exceeds "
+            f"the {MAX_RECEIPT_AGE_DAYS}-day submission window. "
+            f"Late submissions require additional justification."
+        ]
+
+    return []
+
+
 async def audit_claim(
     extracted_data: dict,
     category: str,
     business_purpose: str,
     region: str = "all",
 ) -> dict:
+
+    # Date validity check (runs before everything else)
+    date_issues = check_date_validity(extracted_data)
+    if date_issues:
+        age_str = extracted_data.get("date", "")
+        try:
+            age_days = (datetime.now() - datetime.strptime(age_str, "%Y-%m-%d")).days
+        except ValueError:
+            age_days = 0
+
+        if age_days > HARD_REJECT_AGE_DAYS or age_days < 0:
+            return {
+                "status": "rejected",
+                "risk_level": "high",
+                "explanation": "; ".join(date_issues),
+                "policy_snippet": None,
+                "violations": date_issues,
+            }
+        else:
+            return {
+                "status": "flagged",
+                "risk_level": "medium",
+                "explanation": "; ".join(date_issues),
+                "policy_snippet": None,
+                "violations": date_issues,
+            }
 
     policies = await get_relevant_policies(category, region)
 
@@ -337,6 +388,30 @@ async def audit_claim(
             "violations": ["No policy found"],
         }
 
+ 
+    receipt_currency = (extracted_data.get("currency") or "").upper()
+    if receipt_currency:
+        policy_currencies = {
+            (p.get("constraints", {}).get("currency") or "GBP").upper()
+            for p in policies
+        }
+        if receipt_currency not in policy_currencies:
+            return {
+                "status": "flagged",
+                "risk_level": "medium",
+                "explanation": (
+                    f"Receipt currency is {receipt_currency}, but no expense policy "
+                    f"exists for this currency. Available policies are configured for "
+                    f"{', '.join(sorted(policy_currencies))}. "
+                    f"Please add a {receipt_currency} policy or review this claim manually."
+                ),
+                "policy_snippet": policies[0]["rule_text"],
+                "violations": [
+                    f"No applicable policy found for currency {receipt_currency} "
+                    f"(policies only cover: {', '.join(sorted(policy_currencies))})"
+                ],
+            }
+
     violations = check_constraints(extracted_data, policies)
 
     contextual_flags = check_contextual_flags(
@@ -345,7 +420,7 @@ async def audit_claim(
         category=category,
     )
 
-    # 🔥 RULE-BASED DECISION (PRIMARY)
+
     if violations:
         return {
             "status": "rejected",
@@ -364,7 +439,7 @@ async def audit_claim(
             "violations": contextual_flags,
         }
     
-    # ✅ SAFE APPROVAL (no Gemini needed)
+
     return {
         "status": "approved",
         "risk_level": "low",
