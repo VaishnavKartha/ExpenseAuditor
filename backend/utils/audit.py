@@ -325,87 +325,53 @@ async def audit_claim(
     business_purpose: str,
     region: str = "all",
 ) -> dict:
-    
 
     policies = await get_relevant_policies(category, region)
 
     if not policies:
- 
         return {
             "status": "flagged",
             "risk_level": "medium",
-            "explanation": f"No expense policies found for category '{category}'. Flagged for manual auditor review.",
+            "explanation": "No matching policy found",
             "policy_snippet": None,
-            "violations": ["No matching policy found for this expense category"],
+            "violations": ["No policy found"],
         }
 
     violations = check_constraints(extracted_data, policies)
-
 
     contextual_flags = check_contextual_flags(
         business_purpose=business_purpose,
         extracted_data=extracted_data,
         category=category,
     )
+
+    # 🔥 RULE-BASED DECISION (PRIMARY)
+    if violations:
+        return {
+            "status": "rejected",
+            "risk_level": "high",
+            "explanation": "; ".join(violations),
+            "policy_snippet": policies[0]["rule_text"],
+            "violations": violations,
+        }
+
     if contextual_flags:
-        print(f"Contextual flags detected: {contextual_flags}")
-
-
-    policies_text = "\n\n".join([
-        f"Category: {p.get('category')}, Region: {p.get('region')}\n"
-        f"Rule: {p.get('rule_text')}\n"
-        f"Constraints: max_amount={p.get('constraints', {}).get('max_amount')} "
-        f"{p.get('constraints', {}).get('currency', 'GBP')}, "
-        f"prohibited_items={p.get('constraints', {}).get('prohibited_items', [])}, "
-        f"allowed_days={p.get('constraints', {}).get('allowed_days', [])}"
-        for p in policies
-    ])
-
-    receipt_str = json.dumps(extracted_data, indent=2, default=str)
-    violations_str = "\n".join(violations) if violations else "None detected"
-    contextual_str = "\n".join(contextual_flags) if contextual_flags else "None detected"
-
-    prompt = AUDIT_PROMPT.format(
-        receipt_data=receipt_str,
-        business_purpose=business_purpose,
-        category=category,
-        policies_text=policies_text,
-        violations=violations_str,
-        contextual_flags=contextual_str,
-    )
-
-    try:
-        response = client.models.generate_content(
-            model="gemini-flash-latest",
-            contents=[prompt],
-        )
-
-        raw_text = response.text.strip()
-        raw_text = re.sub(r"```json|```", "", raw_text).strip()
-        result = json.loads(raw_text)
-
- 
-        ai_violations = result.get("violations", [])
-        all_violations = list(set(violations + contextual_flags + ai_violations))
-        result["violations"] = all_violations
-
-        if (violations or contextual_flags) and result.get("status") == "approved":
-            result["status"] = "flagged"
-            result["risk_level"] = "medium"
-
-        print(f"Audit result: status={result.get('status')}, "
-              f"risk={result.get('risk_level')}, "
-              f"violations={len(all_violations)}")
-
-        return result
-
-    except json.JSONDecodeError:
-        print(f"Gemini audit returned invalid JSON: {response.text[:200]}")
-        return _fallback_result(violations + contextual_flags)
-
-    except Exception as e:
-        print(f"Gemini audit failed: {e}")
-        return _fallback_result(violations + contextual_flags)
+        return {
+            "status": "flagged",
+            "risk_level": "medium",
+            "explanation": "; ".join(contextual_flags),
+            "policy_snippet": policies[0]["rule_text"],
+            "violations": contextual_flags,
+        }
+    
+    # ✅ SAFE APPROVAL (no Gemini needed)
+    return {
+        "status": "approved",
+        "risk_level": "low",
+        "explanation": "All checks passed",
+        "policy_snippet": policies[0]["rule_text"],
+        "violations": [],
+    }
 
 
 def _fallback_result(violations: list[str]) -> dict:

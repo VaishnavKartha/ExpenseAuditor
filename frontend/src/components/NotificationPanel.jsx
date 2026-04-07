@@ -29,7 +29,7 @@ export default function NotificationPanel() {
 
   useEffect(() => {
     fetchNotifications();
-    // Poll every 30 seconds
+    
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -61,13 +61,16 @@ export default function NotificationPanel() {
   };
 
   const formatTime = (dateString) => {
+    dateString=dateString+'Z'
     const date = new Date(dateString);
     const now = new Date();
     const diff = (now - date) / 1000;
 
+    console.log(diff)
+
     if (diff < 60) return "Just now";
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    else if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    else if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     return date.toLocaleDateString("en-GB", {
       day: "2-digit",
       month: "short",

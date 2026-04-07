@@ -69,7 +69,7 @@ def extract(file_path: str) -> dict:
 
        
         response = client.models.generate_content(
-            model="gemini-flash-latest",  
+            model="gemini-2.5-flash-lite",  
             contents=[image_part, GEMINI_PROMPT],
         )
 
@@ -110,4 +110,3 @@ def _empty_result() -> dict:
         "items":       [],
         "confidence":  "low",
     }
-

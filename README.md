@@ -68,7 +68,7 @@ Organizations process hundreds of employee expense claims manually, making it ti
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/ExpenseAuditor.git
+git clone https://github.com/VaishnavKartha/ExpenseAuditor.git
 cd ExpenseAuditor
 ```
 
